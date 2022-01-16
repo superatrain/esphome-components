@@ -1,0 +1,181 @@
+substitutions:
+  name: "Orbivo S31"
+  node_name: zmai90
+
+  # ZMAi-90 TuyaMCU datapoints
+  dp_switch: "1"
+  dp_total: "17"
+  dp_power: "19"
+  dp_current: "18"
+  dp_voltage: "20"
+
+  # WiFi configuration
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  wifi_ap_ssid: "$name Fallback Hotspot"
+  wifi_ap_password: !secret wifi_ap_password
+
+  # HA API configuration
+  api_password: !secret api_password # disabled if absent or empty
+
+  # OTA configuration
+  ota_password: !secret ota_password # disabled if absent or empty
+
+  # Web Server configuration
+  web_port: "80"
+  web_username: !secret web_username # disabled if absent or empty
+  web_password: !secret web_password # disabled if absent or empty
+
+esphome:
+  platform: ESP8266
+  board: esp01_2m
+  name: $node_name
+
+external_components:
+  - source: github://superatrain/esphome-components
+
+backup:
+  auth:
+    username: $web_username
+    password: $web_password
+
+wifi:
+  ssid: $wifi_ssid
+  password: $wifi_password
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: $wifi_ap_ssid
+    password: $wifi_ap_password
+  fast_connect: true
+
+captive_portal:
+
+# Enable Home Assistant API
+api:
+  password: $api_password
+
+# Make sure you can upload new firmware OTA
+ota:
+  password: $ota_password
+
+web_server:
+  port: $web_port
+  auth:
+    username: $web_username
+    password: $web_password
+
+time:
+  - platform: homeassistant
+    id: g_time
+# Uncomment next 4 lines if you want to force update values from Tuya MCU every 10 seconds
+#    on_time:
+#      seconds: 9,19,29,39,49,59
+#      then:
+#        - uart.write: [0x55, 0xaa, 0x00, 0x08, 0x00, 0x00, 0x07]
+
+# Enable logging
+logger:
+  esp8266_store_log_strings_in_flash: false
+  # Make sure logging is not using the serial port
+  baud_rate: 0
+
+uart:
+  rx_pin: GPIO3
+  tx_pin: GPIO1
+  baud_rate: 2400
+  parity: ODD
+  
+
+v9260:
+  time_id: g_time
+
+switch:
+  # Uncomment next 5 lines to expose main switch to HA
+  # Platform GPIO
+
+
+# Create sensors
+sensor:
+  # total
+  - platform: "v9260"
+    id: total
+    name: "$name Energy Total"
+    sensor_datapoint: $dp_total
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+    unit_of_measurement: "kWh"
+    icon: "mdi:sigma"
+    device_class: "energy"
+    # i am not interesting in total but tariffs, so you can comment or set it to false if you want internal total sensor
+    internal: true
+    state_class: total_increasing
+
+  # active power
+  - platform: "v9260"
+    id: power
+    name: "$name Active Power"
+    sensor_datapoint: $dp_power
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.1
+    unit_of_measurement: "W"
+    icon: "mdi:flash"
+    device_class: "power"
+    state_class: measurement
+
+  # current
+  - platform: "v9260"
+    id: current
+    name: "${name} Current"
+    sensor_datapoint: $dp_current
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+    unit_of_measurement: "A"
+    icon: "mdi:current-ac"
+    device_class: "current"
+    state_class: measurement
+
+  # voltage
+  - platform: "v9260"
+    id: voltage
+    name: "$name Voltage"
+    sensor_datapoint: $dp_voltage
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.1
+    unit_of_measurement: "V"
+    icon: "mdi:sine-wave"
+    device_class: "voltage"
+    state_class: measurement
+
+  - platform: "energy_monitoring"
+    id: mon
+    power: power
+    voltage: voltage
+    current: current
+    apparent_power:
+      name: "$name Apparent Power"
+    reactive_power:
+      name: "$name Reactive Power"
+    power_factor:
+      name: "$name Power Factor"
+
+  - platform: "energy_statistics"
+    id: stat
+    total: total
+    save_to_flash_interval: 60s
+    energy_today:
+      id: today
+      name: "$name Energy Today"
+
+
+  - platform: startup
+    id: uptime
+    name: "$name Uptime"
+    entity_category: diagnostic
+
+  - platform: wifi_signal
+    name: "$name WiFi Signal"
+    entity_category: diagnostic
